@@ -6,3 +6,5 @@ faker
 pyarrow
 matplotlib
 psutil
+mimesis
+jinja2

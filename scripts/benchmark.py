@@ -6,12 +6,13 @@ import pandas as pd
 import polars as pl
 import duckdb
 import daft
+import argparse
 
 def get_memory_usage():
     process = psutil.Process()
     return process.memory_info().rss / 1024 / 1024  # MB
 
-def benchmark_library(library_name, file_path, iterations=10):
+def benchmark_library(library_name, file_path, iterations=5):  # Reduced to 5 for speed
     results = []
     for i in range(iterations):
         gc.collect()
@@ -32,7 +33,7 @@ def benchmark_library(library_name, file_path, iterations=10):
 
             load_time = time.perf_counter() - start_time
             peak_mem = get_memory_usage()
-            memory_used = peak_mem - start_mem
+            memory_used = max(0, peak_mem - start_mem)  # Ensure non-negative
 
             results.append({
                 'iteration': i + 1,
@@ -55,24 +56,29 @@ def benchmark_library(library_name, file_path, iterations=10):
 
     return results
 
-def main():
+def main(file_path):
     Path("results").mkdir(exist_ok=True)
-    files = ["data/sales_100k.parquet", "data/sales_1000k.parquet"]
     libraries = ['pandas', 'polars', 'duckdb', 'daft']
     all_results = []
 
-    for file_path in files:
-        if not Path(file_path).exists():
-            print(f"File {file_path} not found, skipping.")
-            continue
-        for lib in libraries:
-            print(f"Benchmarking {lib} on {file_path}")
-            results = benchmark_library(lib, file_path)
-            all_results.extend(results)
+    if not Path(file_path).exists():
+        print(f"File {file_path} not found.")
+        return
 
+    for lib in libraries:
+        print(f"Benchmarking {lib} on {file_path}")
+        results = benchmark_library(lib, file_path)
+        all_results.extend(results)
+
+    # Save with file name
+    file_name = Path(file_path).stem  # e.g., sales_100k
+    output_path = f"results/benchmark_{file_name}_detailed.parquet"
     df_results = pd.DataFrame(all_results)
-    df_results.to_parquet("results/benchmark_timings_detailed.parquet", index=False)
-    print("Benchmark results saved to results/benchmark_timings_detailed.parquet")
+    df_results.to_parquet(output_path, index=False)
+    print(f"Benchmark results saved to {output_path}")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Benchmark libraries on a Parquet file")
+    parser.add_argument("--file", type=str, required=True, help="Path to the Parquet file")
+    args = parser.parse_args()
+    main(args.file)
